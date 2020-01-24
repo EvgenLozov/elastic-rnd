@@ -24,7 +24,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @SpringBootTest
-class SearchRepositoryTest {
+class ElasticSearchActionTest {
 
     @Autowired
     private ElasticsearchTemplate elasticsearchTemplate;
@@ -46,10 +46,7 @@ class SearchRepositoryTest {
 
     @Test
     void search() {
-        var postDocument = new PostDocument(UUID.randomUUID().toString());
-        postDocument.setAuthor("test author");
-        postDocument.setTitle("testTitle");
-
+        var postDocument = new PostDocument(UUID.randomUUID().toString(), "testTitle", "test author");
         index(postDocument);
 
         SearchResultMapper resultMapper = new SeqNumPrimaryTermSearchResultMapper(resultsMapper);

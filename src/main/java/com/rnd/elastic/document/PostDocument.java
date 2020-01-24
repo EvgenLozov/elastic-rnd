@@ -1,5 +1,6 @@
 package com.rnd.elastic.document;
 
+import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -10,6 +11,7 @@ import java.time.Instant;
 
 @Getter
 @Setter
+@EqualsAndHashCode
 @NoArgsConstructor
 @Document(indexName = "post", type = "postdoc", createIndex = false)
 public class PostDocument implements Versionable{
@@ -26,7 +28,9 @@ public class PostDocument implements Versionable{
     private long primaryTerm = SequenceNumbers.UNASSIGNED_PRIMARY_TERM;
 
 
-    public PostDocument(String id) {
+    public PostDocument(String id, String title, String author) {
         this.id = id;
+        this.title = title;
+        this.author = author;
     }
 }

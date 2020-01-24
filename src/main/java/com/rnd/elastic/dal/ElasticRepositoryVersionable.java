@@ -7,5 +7,5 @@ import java.util.List;
 
 public interface ElasticRepositoryVersionable {
     <T extends Versionable> List<T> search(QueryBuilder qb, Class<T> docClass);
-    <T extends Versionable> T index(T doc);
+    <T extends Versionable> T index(T doc) throws VersionConflictException;
 }

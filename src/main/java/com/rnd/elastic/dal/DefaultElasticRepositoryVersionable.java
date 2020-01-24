@@ -1,9 +1,11 @@
 package com.rnd.elastic.dal;
 
 import com.rnd.elastic.document.Versionable;
+import lombok.extern.slf4j.Slf4j;
 import org.elasticsearch.action.index.IndexRequest;
 import org.elasticsearch.action.support.WriteRequest;
 import org.elasticsearch.common.xcontent.XContentType;
+import org.elasticsearch.index.engine.VersionConflictEngineException;
 import org.elasticsearch.index.query.QueryBuilder;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.elasticsearch.core.ElasticsearchTemplate;
@@ -13,10 +15,11 @@ import org.springframework.data.elasticsearch.core.SearchResultMapper;
 import java.util.List;
 import java.util.Map;
 
+@Slf4j
 public class DefaultElasticRepositoryVersionable implements ElasticRepositoryVersionable {
 
     private static final int DEFAULT_FROM = 0;
-    private static final long DEFAULT_SIZE = 50;
+    private static final int DEFAULT_SIZE = 50;
 
     private ElasticsearchTemplate elasticsearchTemplate;
     private SearchResultMapper resultsMapper;
@@ -36,14 +39,14 @@ public class DefaultElasticRepositoryVersionable implements ElasticRepositoryVer
                 .setQuery(qb)
                 .seqNoAndPrimaryTerm(true)
                 .setFrom(DEFAULT_FROM)
-                .setSize(Math.toIntExact(DEFAULT_SIZE))
+                .setSize(DEFAULT_SIZE)
                 .get();
 
         return resultsMapper.mapResults(searchResponse, docClass, Pageable.unpaged()).getContent();
     }
 
     @Override
-    public <T extends Versionable> T index(T doc) {
+    public <T extends Versionable> T index(T doc) throws VersionConflictException {
         var indexRequest = new IndexRequest(getIndexName(doc.getClass()),
                                             getIndexType(doc.getClass()),
                                             String.valueOf(doc.getId()));
@@ -52,10 +55,16 @@ public class DefaultElasticRepositoryVersionable implements ElasticRepositoryVer
         indexRequest.setIfPrimaryTerm(doc.getPrimaryTerm());
         indexRequest.source(convertToMap(doc), XContentType.JSON);
 
-        var indexResponse = elasticsearchTemplate.getClient().index(indexRequest).actionGet();
+        try {
+            var indexResponse = elasticsearchTemplate.getClient().index(indexRequest).actionGet();
 
-        doc.setSeqNum(indexResponse.getSeqNo());
-        doc.setPrimaryTerm(indexResponse.getPrimaryTerm());
+            doc.setSeqNum(indexResponse.getSeqNo());
+            doc.setPrimaryTerm(indexResponse.getPrimaryTerm());
+        } catch (VersionConflictEngineException e) {
+            throw new VersionConflictException(e);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
 
         return doc;
     }

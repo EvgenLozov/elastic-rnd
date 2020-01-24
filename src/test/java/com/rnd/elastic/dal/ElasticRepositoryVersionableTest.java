@@ -9,14 +9,14 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.elasticsearch.core.ElasticsearchTemplate;
 import org.springframework.data.elasticsearch.core.EntityMapper;
-import org.springframework.data.elasticsearch.core.ResultsMapper;
 import org.springframework.data.elasticsearch.core.SearchResultMapper;
 import org.springframework.data.elasticsearch.core.query.IndexQuery;
 
 import java.util.List;
 import java.util.UUID;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @SpringBootTest
 class ElasticRepositoryVersionableTest {
@@ -44,9 +44,7 @@ class ElasticRepositoryVersionableTest {
 
     @Test
     void search() {
-        var postDocument = new PostDocument(UUID.randomUUID().toString());
-        postDocument.setAuthor("test author");
-        postDocument.setTitle("testTitle");
+        var postDocument = new PostDocument(UUID.randomUUID().toString(), "testTitle", "test author");
 
         var indexQuery = new IndexQuery();
         indexQuery.setId(postDocument.getId());
@@ -68,20 +66,35 @@ class ElasticRepositoryVersionableTest {
     }
 
     @Test
-    void index() {
-        var postDocument = new PostDocument(UUID.randomUUID().toString());
-        postDocument.setAuthor("test author");
-        postDocument.setTitle("testTitle");
+    void index_one_time() throws VersionConflictException {
+        var postDocument = new PostDocument(UUID.randomUUID().toString(), "testTitle", "test author");
 
         PostDocument saved = elasticRepository.index(postDocument);
 
         assertEquals(0, saved.getSeqNum());
         assertEquals(1, saved.getPrimaryTerm());
+    }
 
+    @Test
+    void index_two_times() throws VersionConflictException {
+        var postDocument = new PostDocument(UUID.randomUUID().toString(), "testTitle", "test author");
+
+        PostDocument saved = elasticRepository.index(postDocument);
         saved.setContent("test");
+
         elasticRepository.index(saved);
 
         assertEquals(1, saved.getSeqNum());
         assertEquals(1, saved.getPrimaryTerm());
+    }
+
+    @Test
+    void index_with_conflict() throws VersionConflictException {
+        var postDocument = new PostDocument(UUID.randomUUID().toString(), "testTitle", "test author");
+
+        PostDocument saved = elasticRepository.index(postDocument);
+        saved.setSeqNum(10L);
+
+        assertThrows(VersionConflictException.class, () -> elasticRepository.index(postDocument));
     }
 }
