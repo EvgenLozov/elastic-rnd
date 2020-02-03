@@ -2,8 +2,9 @@ package com.rnd.elastic.dal;
 
 import com.rnd.elastic.document.Versionable;
 import lombok.extern.slf4j.Slf4j;
+import org.elasticsearch.action.bulk.BulkRequest;
+import org.elasticsearch.action.bulk.BulkResponse;
 import org.elasticsearch.action.index.IndexRequest;
-import org.elasticsearch.action.support.WriteRequest;
 import org.elasticsearch.common.xcontent.XContentType;
 import org.elasticsearch.index.engine.VersionConflictEngineException;
 import org.elasticsearch.index.query.QueryBuilder;
@@ -14,6 +15,7 @@ import org.springframework.data.elasticsearch.core.SearchResultMapper;
 
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @Slf4j
 public class DefaultElasticRepositoryVersionable implements ElasticRepositoryVersionable {
@@ -47,16 +49,8 @@ public class DefaultElasticRepositoryVersionable implements ElasticRepositoryVer
 
     @Override
     public <T extends Versionable> T index(T doc) throws VersionConflictException {
-        var indexRequest = new IndexRequest(getIndexName(doc.getClass()),
-                                            getIndexType(doc.getClass()),
-                                            String.valueOf(doc.getId()));
-        indexRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.WAIT_UNTIL);
-        indexRequest.setIfSeqNo(doc.getSeqNum());
-        indexRequest.setIfPrimaryTerm(doc.getPrimaryTerm());
-        indexRequest.source(convertToMap(doc), XContentType.JSON);
-
         try {
-            var indexResponse = elasticsearchTemplate.getClient().index(indexRequest).actionGet();
+            var indexResponse = elasticsearchTemplate.getClient().index(prepareIndexRequest(doc)).actionGet();
 
             doc.setSeqNum(indexResponse.getSeqNo());
             doc.setPrimaryTerm(indexResponse.getPrimaryTerm());
@@ -67,6 +61,28 @@ public class DefaultElasticRepositoryVersionable implements ElasticRepositoryVer
         }
 
         return doc;
+    }
+
+    @Override
+    public <T extends Versionable> BulkResponse bulkIndex(List<T> docs) {
+        var bulkRequest = new BulkRequest();
+
+        bulkRequest.add(
+                docs.stream()
+                        .map(this::prepareIndexRequest)
+                        .collect(Collectors.toList())
+        );
+
+        return elasticsearchTemplate.getClient().bulk(bulkRequest).actionGet();
+    }
+
+    private <T extends Versionable> IndexRequest prepareIndexRequest(T doc) {
+        var indexRequest = new IndexRequest(getIndexName(doc.getClass()), getIndexType(doc.getClass()), doc.getId());
+        indexRequest.setIfSeqNo(doc.getSeqNum());
+        indexRequest.setIfPrimaryTerm(doc.getPrimaryTerm());
+        indexRequest.source(convertToMap(doc), XContentType.JSON);
+
+        return indexRequest;
     }
 
     private Map<String, Object> convertToMap(Object doc) {
